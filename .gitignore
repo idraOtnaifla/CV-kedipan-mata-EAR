@@ -227,3 +227,6 @@ __marimo__/
 pyvenv.cfg
 .venv
 pip-selfcheck.json
+
+# Data
+DATA/VIDEOS/OUTPUTS/
