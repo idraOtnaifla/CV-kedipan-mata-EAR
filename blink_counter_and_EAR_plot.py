@@ -28,7 +28,7 @@ class BlinkCounterandEARPlot:
         'RED': {'hex': '#f70202', 'bgr': None}
     }
 
-    def __init__(self, video_path, threshold, consec_frames, save_video=False, output_filename=None):
+    def __init__(self, video_path, threshold, consec_frames, save_video, output_filename=None):
         """
         Initialize the BlinkCounter with video and detection parameters.
         
@@ -61,7 +61,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS"
+            save_dir = "DATA/VIDEOS/OUTPUTS/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -353,7 +353,7 @@ class BlinkCounterandEARPlot:
             self.out.write(stacked_frame)
 
         # Display frame
-        resizing_factor = 0.4
+        resizing_factor = 1
         resized_shape = (
             int(resizing_factor * stacked_frame.shape[1]),
             int(resizing_factor * stacked_frame.shape[0])
@@ -375,12 +375,15 @@ class BlinkCounterandEARPlot:
 
 if __name__ == "__main__":
     # Example usage
-    input_video_path = 0#"DATA/VIDEOS/INPUTS/blinking_1.mp4"
-    blink_counter = BlinkCounterandEARPlot(
-        video_path=input_video_path,
-        threshold=0.2,
-        consec_frames=8,
-        save_video=True,
-        output_filename="blinking_1_output.mp4"
-    )
-    blink_counter.process_video()
+    
+    
+    for file in ["jauh"]:
+        input_video_path = r"DATA/VIDEOS/INPUTS/" + file + ".mp4"
+        blink_counter = BlinkCounterandEARPlot(
+            video_path=input_video_path,
+            threshold=0.2,
+            consec_frames=5,
+            save_video=False,
+            output_filename= file + ".mp4"
+        )
+        blink_counter.process_video()
