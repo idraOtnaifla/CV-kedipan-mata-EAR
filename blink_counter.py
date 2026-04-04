@@ -226,8 +226,8 @@ if __name__ == "__main__":
     # Create blink counter with custom parameters
     blink_counter = BlinkCounter(
         video_path=input_video_path,
-        ear_threshold=0.18,  
-        consec_frames=4,    
+        ear_threshold=0.2,  
+        consec_frames=5,    
         save_video=True,
         output_filename="blink_counter_4.mp4"
     )
