@@ -138,6 +138,6 @@ def generate_face_mesh(video_path, resizing_factor, save_video=True, filename="F
 
 if __name__ == "__main__":
     video_path = 0
-    resizing_factor = 1 if video_path == 0 else 0.5
+    resizing_factor = 1 if video_path == 0 else 0.2
     generate_face_mesh(video_path, resizing_factor)
 

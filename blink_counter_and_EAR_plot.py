@@ -61,7 +61,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/ARIN/200/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -71,7 +71,9 @@ class BlinkCounterandEARPlot:
         self.frame_counter = 0
         self.frame_number = 0
         self.ear_values = []
+        self.saved_ear_values = []
         self.frame_numbers = []
+        self.saved_frame_numbers = []
         self.max_frames = 100
         self.new_w = self.new_h = None
         # Add default y-axis limits
@@ -274,6 +276,7 @@ class BlinkCounterandEARPlot:
                 raise IOError(f"Failed to open video: {self.video_path}")
 
             self._process_video_frames(cap)
+            self._save_ear_values_to_txt()
             
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -300,16 +303,35 @@ class BlinkCounterandEARPlot:
             
             if ear is not None:
                 self._update_blink_detection(ear)
+            
                 self._update_visualization(frame, ear, fps)
 
             if cv.waitKey(1) & 0xFF == ord('p'):
                 break
 
+    def _save_ear_values_to_txt(self):
+        if not self.frame_numbers or not self.ear_values:
+            return
+
+        # Folder yang sama dengan file video output
+        output_dir = os.path.dirname(self.output_filename)
+        base_name = os.path.splitext(os.path.basename(self.output_filename))[0]
+        
+        os.makedirs(output_dir, exist_ok=True)
+        txt_path = os.path.join(output_dir, f"{base_name}.txt")
+
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write("frame_number\tear\n")
+            for frame_id, ear in zip(self.saved_frame_numbers, self.saved_ear_values):
+                f.write(f"{frame_id}\t{ear:.6f}\n")            
+
     def _update_blink_detection(self, ear):
         """Update blink detection based on EAR value."""
         self.ear_values.append(ear)
+        self.saved_ear_values.append(ear)
         self.frame_numbers.append(self.frame_number)
-        
+        self.saved_frame_numbers.append(self.frame_number)
+
         if ear < self.EAR_THRESHOLD:
             self.frame_counter += 1
         else:
@@ -376,14 +398,14 @@ class BlinkCounterandEARPlot:
 if __name__ == "__main__":
     # Example usage
     
-    # for folder in ["50","100","150","200"] :
-    #     for file in ["0","10","20","30","40","50","60","70","80","90"]:
+    # for folder in ["50"] :
+    #     for file in ["30"]:
             input_video_path = 0#"DATA/VIDEOS/INPUTS/ARIN/200/0.mp4"
             blink_counter = BlinkCounterandEARPlot(
                 video_path=input_video_path,
                 threshold=0.27,
                 consec_frames=10,
-                save_video=False,
-                output_filename= "0.mp4"
+                save_video=True,
+                output_filename= "x and y.mp4"
             )
             blink_counter.process_video()

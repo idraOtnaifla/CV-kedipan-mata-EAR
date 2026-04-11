@@ -173,7 +173,7 @@ class BlinkCounter:
                 ret, frame = cap.read()
                 if not ret:
                     break
-
+                    
                 # Detect facial landmarks
                 frame, face_landmarks = self.generator.create_face_mesh(frame, draw=False)
 
