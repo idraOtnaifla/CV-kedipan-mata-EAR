@@ -147,17 +147,18 @@ class BlinkCounter:
         """
         try:
             # Open video capture
-            cap = cv.VideoCapture(self.video_path)
+            cap = cv.VideoCapture(self.video_path, cv.CAP_DSHOW)
             if not cap.isOpened():
                 print(f"Failed to open video: {self.video_path}")
                 raise IOError("Error: couldn't open the video!")
 
             # Get video properties
-            w, h, fps = (int(cap.get(x)) for x in (
+            w, h, fps = 320,240,30  # Default values
+            """"w, h, fps = (int(cap.get(x)) for x in (
                 cv.CAP_PROP_FRAME_WIDTH,
                 cv.CAP_PROP_FRAME_HEIGHT,
                 cv.CAP_PROP_FPS
-            ))
+            ))"""
 
             # Initialize video writer if saving is enabled
             if self.save_video:
