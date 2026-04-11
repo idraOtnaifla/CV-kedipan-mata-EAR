@@ -147,18 +147,17 @@ class BlinkCounter:
         """
         try:
             # Open video capture
-            cap = cv.VideoCapture(self.video_path, cv.CAP_DSHOW)
+            cap = cv.VideoCapture(self.video_path,cv.CAP_DSHOW)  # Use CAP_DSHOW for Windows to avoid warnings
             if not cap.isOpened():
                 print(f"Failed to open video: {self.video_path}")
                 raise IOError("Error: couldn't open the video!")
 
             # Get video properties
-            w, h, fps = 320,240,30  # Default values
-            """"w, h, fps = (int(cap.get(x)) for x in (
+            w, h, fps = (int(cap.get(x)) for x in (
                 cv.CAP_PROP_FRAME_WIDTH,
                 cv.CAP_PROP_FRAME_HEIGHT,
                 cv.CAP_PROP_FPS
-            ))"""
+            ))
 
             # Initialize video writer if saving is enabled
             if self.save_video:
@@ -221,8 +220,7 @@ class BlinkCounter:
 
 # Example usage
 if __name__ == "__main__":
-    input_video_path = 0
-    #"DATA/VIDEOS/INPUTS/blinking_4.mp4"
+    input_video_path = 0#"DATA/VIDEOS/INPUTS/blinking_4.mp4"
     
     # Create blink counter with custom parameters
     blink_counter = BlinkCounter(
@@ -230,6 +228,6 @@ if __name__ == "__main__":
         ear_threshold=0.2,  
         consec_frames=5,    
         save_video=True,
-        output_filename="blink_counter_4.mp4"
+        output_filename="blink_counter.mp4"
     )
     blink_counter.process_video()

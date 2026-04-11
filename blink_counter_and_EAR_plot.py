@@ -61,7 +61,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/10 blink 3 count/ + folder + /"
+            save_dir = "DATA/VIDEOS/OUTPUTS/ARIN/200/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -269,7 +269,7 @@ class BlinkCounterandEARPlot:
     def process_video(self):
         """Process the entire video and detect blinks."""
         try:
-            cap = cv.VideoCapture(self.video_path, cv.CAP_DSHOW)
+            cap = cv.VideoCapture(self.video_path)
             if not cap.isOpened():
                 raise IOError(f"Failed to open video: {self.video_path}")
 
@@ -378,12 +378,12 @@ if __name__ == "__main__":
     
     # for folder in ["50","100","150","200"] :
     #     for file in ["0","10","20","30","40","50","60","70","80","90"]:
-            input_video_path = 0#"DATA/VIDEOS/INPUTS/10 blink 3 count/" + folder + "/" + file + ".mp4"
+            input_video_path = 0#"DATA/VIDEOS/INPUTS/ARIN/200/0.mp4"
             blink_counter = BlinkCounterandEARPlot(
                 video_path=input_video_path,
-                threshold=0.2,
-                consec_frames=5,
+                threshold=0.27,
+                consec_frames=10,
                 save_video=False,
-                output_filename= "file + .mp4"
+                output_filename= "0.mp4"
             )
             blink_counter.process_video()
