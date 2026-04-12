@@ -83,7 +83,7 @@ class BlinkCounterandEARPlot:
     def _init_plot(self):
         """Initialize the matplotlib plot for EAR visualization."""
         # Set up dark theme plot
-        plt.style.use('dark_background')
+        plt.style.use('default')
         plt.ioff()
         self.fig, self.ax = plt.subplots(figsize=(8, 5), dpi=200)
         self.canvas = FigureCanvas(self.fig)
@@ -99,26 +99,26 @@ class BlinkCounterandEARPlot:
     def _configure_plot_aesthetics(self):
         """Configure the aesthetic properties of the plot."""
         # Set background colors
-        self.fig.patch.set_facecolor('#000000')
-        self.ax.set_facecolor('#000000')
+        self.fig.patch.set_facecolor("#FFFFFF")
+        self.ax.set_facecolor("#FFFFFF")
         
         # Configure axes with default limits initially
         self.ax.set_ylim(self.default_ymin, self.default_ymax)
         self.ax.set_xlim(0, self.max_frames)
         
         # Set labels and title
-        self.ax.set_xlabel("Frame Number", color='white', fontsize=12)
-        self.ax.set_ylabel("EAR", color='white', fontsize=12)
+        self.ax.set_xlabel("Frame Number", color='black', fontsize=12)
+        self.ax.set_ylabel("EAR", color='black', fontsize=12)
         self.ax.set_title("Real-Time Eye Aspect Ratio (EAR)", 
-                         color='white', pad=10, fontsize=18, fontweight='bold')
+                         color='black', pad=10, fontsize=18, fontweight='bold')
         
         # Configure grid and spines
-        self.ax.grid(True, color='#707b7c', linestyle='--', alpha=0.7)
+        self.ax.grid(True, color="#000000", linestyle='--', alpha=0.7)
         for spine in self.ax.spines.values():
-            spine.set_color('white')
+            spine.set_color('black')
         
         # Configure ticks and legend
-        self.ax.tick_params(colors='white', which='both')
+        self.ax.tick_params(colors='black', which='both')
 
     def _init_plot_data(self):
         """Initialize the plot data and curves."""
@@ -149,9 +149,9 @@ class BlinkCounterandEARPlot:
             handles=[self.EAR_curve, self.threshold_line],
             loc='upper right',
             fontsize=10,
-            facecolor='black',
-            edgecolor='white',
-            labelcolor='white',
+            facecolor='white',
+            edgecolor='black',
+            labelcolor='black',
             framealpha=0.8,
             borderpad=1,
             handlelength=2
@@ -250,7 +250,7 @@ class BlinkCounterandEARPlot:
         color = self.COLORS['BLUE']['bgr'] if ear < self.EAR_THRESHOLD else self.COLORS['GREEN']['bgr']
         
         # Draw landmarks and update blink counter
-        # self._draw_frame_elements(frame, face_landmarks, color)
+        self._draw_frame_elements(frame, face_landmarks, color)
         
         return frame, ear
 
@@ -305,7 +305,7 @@ class BlinkCounterandEARPlot:
             if ear is not None:
                 self._update_blink_detection(ear)
             
-                # self._update_visualization(frame, ear, fps)
+                self._update_visualization(frame, ear, fps)
 
             if cv.waitKey(1) & 0xFF == ord('p'):
                 break
@@ -313,18 +313,19 @@ class BlinkCounterandEARPlot:
     def _save_ear_values_to_txt(self):
         if not self.frame_numbers or not self.ear_values:
             return
-
-        # Folder yang sama dengan file video output
-        output_dir = os.path.dirname(self.output_filename)
-        base_name = os.path.splitext(os.path.basename(self.output_filename))[0]
         
-        os.makedirs(output_dir, exist_ok=True)
-        txt_path = os.path.join(output_dir, f"{base_name}.txt")
+        if self.save_video and self.output_filename:
+            # Folder yang sama dengan file video output
+            output_dir = os.path.dirname(self.output_filename)
+            base_name = os.path.splitext(os.path.basename(self.output_filename))[0]
+            
+            os.makedirs(output_dir, exist_ok=True)
+            txt_path = os.path.join(output_dir, f"{base_name}.txt")
 
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write("frame_number\tear\n")
-            for frame_id, ear in zip(self.saved_frame_numbers, self.saved_ear_values):
-                f.write(f"{frame_id}\t{ear:.6f}\n")            
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write("frame_number\tear\n")
+                for frame_id, ear in zip(self.saved_frame_numbers, self.saved_ear_values):
+                    f.write(f"{frame_id}\t{ear:.6f}\n")            
 
     def _update_blink_detection(self, ear):
         """Update blink detection based on EAR value."""
@@ -399,14 +400,14 @@ class BlinkCounterandEARPlot:
 if __name__ == "__main__":
     # Example usage
     
-    for folder in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
-        for file in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"]:
-            input_video_path = "DATA/VIDEOS/INPUTS/10 blink 3 count/" + folder + "/" + file + ".mp4"
+    # for folder in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
+    #     for file in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"]:
+            input_video_path = 0#"DATA/VIDEOS/INPUTS/10 blink 3 count/" + folder + "/" + file + ".mp4"
             blink_counter = BlinkCounterandEARPlot(
                 video_path=input_video_path,
                 threshold=0.27,
                 consec_frames=5,
-                save_video=True,
-                output_filename= file + ".mp4"
+                save_video=False,
+                output_filename= "file + .mp4"
             )
             blink_counter.process_video()
