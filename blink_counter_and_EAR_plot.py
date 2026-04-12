@@ -61,7 +61,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/10 blink 3 count/" + folder + "/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -250,7 +250,7 @@ class BlinkCounterandEARPlot:
         color = self.COLORS['BLUE']['bgr'] if ear < self.EAR_THRESHOLD else self.COLORS['GREEN']['bgr']
         
         # Draw landmarks and update blink counter
-        self._draw_frame_elements(frame, face_landmarks, color)
+        # self._draw_frame_elements(frame, face_landmarks, color)
         
         return frame, ear
 
@@ -276,6 +276,7 @@ class BlinkCounterandEARPlot:
                 raise IOError(f"Failed to open video: {self.video_path}")
 
             self._process_video_frames(cap)
+
             self._save_ear_values_to_txt()
             
         except Exception as e:
@@ -304,7 +305,7 @@ class BlinkCounterandEARPlot:
             if ear is not None:
                 self._update_blink_detection(ear)
             
-                self._update_visualization(frame, ear, fps)
+                # self._update_visualization(frame, ear, fps)
 
             if cv.waitKey(1) & 0xFF == ord('p'):
                 break
@@ -398,14 +399,14 @@ class BlinkCounterandEARPlot:
 if __name__ == "__main__":
     # Example usage
     
-    # for folder in ["50"] :
-    #     for file in ["30"]:
-            input_video_path = 0#"DATA/VIDEOS/INPUTS/ARIN/200/0.mp4"
+    for folder in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
+        for file in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"]:
+            input_video_path = "DATA/VIDEOS/INPUTS/10 blink 3 count/" + folder + "/" + file + ".mp4"
             blink_counter = BlinkCounterandEARPlot(
                 video_path=input_video_path,
                 threshold=0.27,
-                consec_frames=10,
+                consec_frames=5,
                 save_video=True,
-                output_filename= "x and y.mp4"
+                output_filename= file + ".mp4"
             )
             blink_counter.process_video()
