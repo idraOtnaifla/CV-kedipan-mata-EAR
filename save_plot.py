@@ -61,7 +61,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/10 blink 3 count/" + folder + "/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/"    #10 blink 3 count/" + folder + "/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -85,7 +85,7 @@ class BlinkCounterandEARPlot:
         # Set up dark theme plot
         plt.style.use('default')
         plt.ioff()
-        self.fig, self.ax = plt.subplots(figsize=(10, 5), dpi=200)
+        self.fig, self.ax = plt.subplots(figsize=(8, 5), dpi=200)
         self.canvas = FigureCanvas(self.fig)
         
         # Configure plot aesthetics
@@ -419,14 +419,14 @@ class BlinkCounterandEARPlot:
 if __name__ == "__main__":
     # Example usage
     
-    for folder in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
-        for file in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"]:
+    for folder in ["50 cm"]: 
+        for file in ["0"]:
             input_video_path = "DATA/VIDEOS/INPUTS/10 blink 3 count/" + folder + "/" + file + ".mp4"
             blink_counter = BlinkCounterandEARPlot(
                 video_path=input_video_path,
-                threshold=0.2,
+                threshold=0.27,
                 consec_frames=5,
                 save_video=True,
-                output_filename= file + ".mp4"
+                output_filename= "coba save plot.mp4"
             )
             blink_counter.process_video()
