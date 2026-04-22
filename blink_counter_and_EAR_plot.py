@@ -37,7 +37,7 @@ class BlinkCounterandEARPlot:
             threshold (float): EAR threshold for blink detection
             consec_frames (int): Number of consecutive frames below threshold to count as a blink
             save_video (bool): Whether to save the processed video
-            output_filename (str): Name of the output video file if saving
+            output_filename (str): Name of the video file if saving
         """
         # Initialize core parameters
         self.generator = FaceMeshGenerator()
@@ -61,7 +61,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/10 blink 3 count/" + folder + "/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/" + folder1 + "/" + folder2 + "/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -77,7 +77,7 @@ class BlinkCounterandEARPlot:
         self.max_frames = 400
         self.new_w = self.new_h = None
         # Add default y-axis limits
-        self.default_ymin = 0.18  # Typical minimum EAR value
+        self.default_ymin = 0.17  # Typical minimum EAR value
         self.default_ymax = 0.44  # Typical maximum EAR value
 
     def _init_plot(self):
@@ -250,7 +250,7 @@ class BlinkCounterandEARPlot:
         color = self.COLORS['BLUE']['bgr'] if ear < self.EAR_THRESHOLD else self.COLORS['GREEN']['bgr']
         
         # Draw landmarks and update blink counter
-        self._draw_frame_elements(frame, face_landmarks, color)
+        # self._draw_frame_elements(frame, face_landmarks, color)
         
         return frame, ear
 
@@ -278,7 +278,7 @@ class BlinkCounterandEARPlot:
             self._process_video_frames(cap)
 
             # self._save_ear_values_to_txt()
-            self._save_plot_image()
+            # self._save_plot_image()
             
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -314,8 +314,8 @@ class BlinkCounterandEARPlot:
     def _update_blink_detection(self, ear):
         """Update blink detection based on EAR value."""
         self.ear_values.append(ear)
-        self.saved_ear_values.append(ear)
         self.frame_numbers.append(self.frame_number)
+        self.saved_ear_values.append(ear)
         self.saved_frame_numbers.append(self.frame_number)
 
         if ear < self.EAR_THRESHOLD:
@@ -324,7 +324,8 @@ class BlinkCounterandEARPlot:
             if self.frame_counter >= self.CONSEC_FRAMES:
                 self.blink_counter += 1
             self.frame_counter = 0
-        
+
+
         self.frame_number += 1
 
     def _update_visualization(self, frame, ear, fps):
@@ -361,13 +362,13 @@ class BlinkCounterandEARPlot:
             self.out.write(stacked_frame)
 
         # Display frame
-        resizing_factor = 1
+        resizing_factor = 0.8
         resized_shape = (
             int(resizing_factor * stacked_frame.shape[1]),
             int(resizing_factor * stacked_frame.shape[0])
         )
         stacked_frame_resized = cv.resize(stacked_frame, resized_shape)
-        cv.imshow("Video with EAR Plot", stacked_frame_resized)
+        cv.imshow(folder1 + "/" + folder2 + "/" + file, stacked_frame_resized)
 
     def plot_to_image(self):
         """Convert the matplotlib plot to an OpenCV-compatible image."""
@@ -416,17 +417,41 @@ class BlinkCounterandEARPlot:
 
             self.fig.savefig(plot_image_path, bbox_inches='tight', facecolor=self.fig.get_facecolor())
 
+    def _save_multiseries_plot(self):
+        """Save a multi-series plot comparing EAR values across different videos."""
+        # This method can be implemented to save a combined plot for multiple videos if needed
+        pass    
+
 if __name__ == "__main__":
     # Example usage
+    blink_counter_values = []  # List to store blink counter values for all videos
+    blink_counter_value = 0  # Variable to store the blink counter value for the current video
     
-    for folder in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
-        for file in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"]:
-            input_video_path = "DATA/VIDEOS/INPUTS/10 blink 3 count/" + folder + "/" + file + ".mp4"
-            blink_counter = BlinkCounterandEARPlot(
-                video_path=input_video_path,
-                threshold=0.2,
-                consec_frames=5,
-                save_video=True,
-                output_filename= file + ".mp4"
-            )
-            blink_counter.process_video()
+    for folder1 in ["500 lumen"]:#, "800 lumen", "1000 lumen", "1200 lumen", "1300 lumen"]:
+        for folder2 in ["100 cm", "150 cm", "200 cm"]: 
+            for file in ["0", "10", "20", "30", "40", "50"]:
+                input_video_path = "DATA/VIDEOS/INPUTS/Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
+                blink_counter = BlinkCounterandEARPlot(
+                    video_path=input_video_path,
+                    threshold=0.18,
+                    consec_frames=1,
+                    save_video=True,
+                    output_filename= file + ".mp4"
+                )
+                blink_counter.process_video()
+                blink_counter_value = blink_counter.blink_counter  # Get the blink counter value for the current video  
+
+                blink_counter_values.append(blink_counter_value) #rekam nilai blink counter
+
+            """Untuk menyimpan nilai blink counter ke dalam file teks setelah memproses semua video dalam folder1/folder2."""
+
+            blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/"
+            blink_counter_values_filename = folder1 + folder2 + ".txt"
+            blink_counter_values_path = os.path.join(blink_counter_values_dir, blink_counter_values_filename)
+
+            with open(blink_counter_values_path, "w", encoding="utf-8") as f:
+                # f.write("frame_number\tear\n")
+                for blink_counter_value in blink_counter_values:
+                    f.write(f"{blink_counter_value}\t")
+                    
+            # blink_counter._save_multiseries_plot()
