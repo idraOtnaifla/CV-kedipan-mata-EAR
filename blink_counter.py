@@ -13,10 +13,11 @@ class BlinkCounter:
     
     Attributes:
         ear_threshold (float): Threshold below which eyes are considered closed
-        consec_frames (int): Number of consecutive frames eyes must be closed to count as blink
+        min_consec_frames (int): Number of consecutive frames eyes must be closed to count as blink
+        max_consec_frames (int): Number of consecutive frames eyes must be opened to count as blink
     """
     
-    def __init__(self, video_path, ear_threshold, consec_frames, save_video=False, output_filename=None):
+    def __init__(self, video_path, ear_threshold, min_consec_frames, max_consec_frames, save_video=False, output_filename=None):
         """
         Initialize the BlinkCounter with video source and processing parameters.
         
@@ -45,10 +46,12 @@ class BlinkCounter:
         
         # Blink detection parameters
         self.ear_threshold = ear_threshold  # Eye aspect ratio threshold for blink detection
-        self.consec_frames = consec_frames  # Minimum consecutive frames for a valid blink
+        self.min_consec_frames = min_consec_frames  # Minimum consecutive frames for a valid blink
+        self.max_consec_frames = max_consec_frames  # Maximum consecutive frames for a valid blink
         self.blink_counter = 0    # Counter for total blinks detected
         self.frame_counter = 0    # Counter for consecutive frames below threshold
-        
+        self.frame_number = 0     # Hitung frame yang sudah diproses
+
         # Define colors for visualization (in BGR format)
         self.GREEN_COLOR = (86, 241, 13)  # Used when eyes are open
         self.RED_COLOR = (30, 46, 209)    # Used when eyes are closed
@@ -78,12 +81,17 @@ class BlinkCounter:
         
         if ear < self.ear_threshold:
             self.frame_counter += 1
+
+        if self.frame_counter >= self.max_consec_frames :
+            self.blink_counter = 0
+
         else:
-            if self.frame_counter >= self.consec_frames:
+            if self.frame_counter >= self.min_consec_frames:
                 self.blink_counter += 1
                 blink_detected = True
             self.frame_counter = 0
             
+        self.frame_number += 1    
         return blink_detected
 
     def eye_aspect_ratio(self, eye_landmarks, landmarks):
@@ -226,7 +234,8 @@ if __name__ == "__main__":
     blink_counter = BlinkCounter(
         video_path=input_video_path,
         ear_threshold=0.2,  
-        consec_frames=5,    
+        min_consec_frames=5,
+        max_consec_frames=10,    
         save_video=True,
         output_filename="blink_counter.mp4"
     )
