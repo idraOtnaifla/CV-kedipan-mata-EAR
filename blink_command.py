@@ -74,12 +74,15 @@ class BlinkCounterandEARPlot:
         self.frame_number = 0
         self.blink_framestamp = 0   #Frame dimana blink terdeteksi
         self.blink_interval = 0     #Jeda antar blink 
+        self.fanspeed = 0
         self.ear_values = []
         self.saved_ear_values = []
         self.frame_numbers = []
         self.saved_frame_numbers = []
         self.max_frames = 400
         self.new_w = self.new_h = None
+        self.input_fourcc = None  # Format video input (YUY2, MJPG, dll)
+
         # Add default y-axis limits
         self.default_ymin = 0.17  # Typical minimum EAR value
         self.default_ymax = 0.44  # Typical maximum EAR value
@@ -271,10 +274,33 @@ class BlinkCounterandEARPlot:
             bg_color=color, text_color=(0, 0, 0)
         )
 
+        # Draw fan command
+        DrawingUtils.draw_text_with_bg(
+            frame, f"Kecepatan kipas  = {self.fanspeed}", (0, 100),
+            font_scale=0.75, thickness=1,
+            bg_color=color, text_color=(0, 0, 0)
+        )
+        
+
     def process_video(self):
         """Process the entire video and detect blinks."""
         try:
-            cap = cv.VideoCapture(self.video_path)
+            cap = cv.VideoCapture(self.video_path, cv.CAP_DSHOW)
+
+            # Ambil nilai FourCC
+            fourcc_val = int(cap.get(cv.CAP_PROP_FOURCC))
+
+            # Konversi integer ke string 4 karakter
+            # Rumus: mengambil byte per byte dari integer
+            fourcc_str = "".join([chr((fourcc_val >> 8 * i) & 0xFF) for i in range(4)])
+
+            print(f"Format kamera saat ini: {fourcc_str}")
+
+            # Deteksi format YUY2 dan catat untuk konversi
+            self.input_fourcc = fourcc_str
+            if self.input_fourcc == 'YUY2':
+                print("Mendeteksi format YUY2 - akan dikonversi ke BGR untuk output video")
+
             if not cap.isOpened():
                 raise IOError(f"Failed to open video: {self.video_path}")
 
@@ -308,7 +334,7 @@ class BlinkCounterandEARPlot:
             
             if ear is not None:
                 self._update_blink_detection(ear)
-            
+                            
                 self._update_visualization(frame, ear, fps)
 
             if cv.waitKey(1) & 0xFF == ord('p'):
@@ -323,10 +349,13 @@ class BlinkCounterandEARPlot:
         self.blink_interval = self.frame_number - self.blink_framestamp
 
         if self.blink_interval >= self.interval_threshold :
+            self._command()
             self.blink_counter = 0
+            
 
         if ear < self.EAR_THRESHOLD:
             self.frame_counter += 1
+            
         else:
             if self.frame_counter >= self.MAX_CONSEC_FRAMES :
                 self.frame_counter = 0
@@ -338,6 +367,21 @@ class BlinkCounterandEARPlot:
 
         self.frame_number += 1
 
+    def _command(self):
+        """Execute a command when a blink is detected."""
+        if self.blink_counter >= 6:
+            self.fanspeed = 0
+
+        if self.blink_counter == 3:
+            self.fanspeed = 1
+      
+        if self.blink_counter == 4:
+            self.fanspeed = 2
+
+        if self.blink_counter == 5:
+            self.fanspeed = 3
+
+        
     def _update_visualization(self, frame, ear, fps):
         """Update the visualization including the plot and video output."""
         self._update_plot(ear)
@@ -360,9 +404,13 @@ class BlinkCounterandEARPlot:
             self.new_w = stacked_frame.shape[1]
             self.new_h = stacked_frame.shape[0]
             if self.save_video:
+                # Gunakan codec yang lebih kompatibel:
+                # - 'XVID' = Xvid codec (lebih stabil dari mp4v)
+                # - 'MJPG' = Motion JPEG (lebih andal untuk debug)
+                # - 'DIVX' = DivX codec
                 self.out = cv.VideoWriter(
                     self.output_filename,
-                    cv.VideoWriter_fourcc(*"mp4v"),
+                    cv.VideoWriter_fourcc(*'XVID'),
                     fps,
                     (self.new_w, self.new_h)
                 )
@@ -378,7 +426,7 @@ class BlinkCounterandEARPlot:
             int(resizing_factor * stacked_frame.shape[0])
         )
         stacked_frame_resized = cv.resize(stacked_frame, resized_shape)
-        cv.imshow("folder1 + "/" + folder2 + "/" + file", stacked_frame_resized)
+        cv.imshow("folder1  + folder2  + file", stacked_frame_resized)
 
     def plot_to_image(self):
         """Convert the matplotlib plot to an OpenCV-compatible image."""
@@ -391,6 +439,7 @@ class BlinkCounterandEARPlot:
         img_rgb = cv.cvtColor(img_array, cv.COLOR_RGBA2RGB)
         return img_rgb
 
+        
     def _save_ear_values_to_txt(self):
         """Save the EAR values and corresponding frame numbers to a text file."""
 
@@ -427,17 +476,8 @@ class BlinkCounterandEARPlot:
 
             self.fig.savefig(plot_image_path, bbox_inches='tight', facecolor=self.fig.get_facecolor())
 
-# def _save_blink_counter_to_txt():
-#     """Untuk menyimpan nilai blink counter ke dalam file teks setelah memproses semua video dalam folder1/folder2."""
+# 
 
-#     blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/" + folder1 + "/"
-#     blink_counter_values_filename = folder1 + ".txt"
-#     blink_counter_values_path = os.path.join(blink_counter_values_dir, blink_counter_values_filename)
-
-#     with open(blink_counter_values_path, "w", encoding="utf-8") as f:
-#         # f.write("frame_number\tear\n")
-#         for blink_counter_value in blink_counter_values:
-#             f.write(f"{blink_counter_value}\n")
 
 
 def _save_multiseries_plot(self):
@@ -453,17 +493,17 @@ if __name__ == "__main__":
     # for folder1 in ["500 lumen", "800 lumen", "1000 lumen", "1200 lumen", "1300 lumen"]:
     #     for folder2 in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
     #         for file in ["0", "10", "20", "30", "40", "50"]:
-    input_video_path = 0#"DATA/VIDEOS/INPUTS/Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
-    blink_counter = BlinkCounterandEARPlot(
-        video_path=input_video_path,
-        threshold=0.2,
-        min_consec_frames=1,
-        max_consec_frames=5,
-        interval_threshold=20,
-        save_video=True,
-        output_filename= "cobak.mp4" #file + ".mp4"
-    )
-    blink_counter.process_video()
+                input_video_path = 0#"DATA/VIDEOS/INPUTS/WIN_20260424_10_19_59_Pro.mp4"     #Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
+                blink_counter = BlinkCounterandEARPlot(
+                    video_path=input_video_path,
+                    threshold=0.2,
+                    min_consec_frames=2,
+                    max_consec_frames=5,
+                    interval_threshold=20,
+                    save_video=True,
+                    output_filename= "cobak.mp4" #file + ".mp4"
+                )
+                blink_counter.process_video()
 
                 # blink_counter_value = blink_counter.blink_counter  # Get the blink counter value for the current video  
                 # blink_counter_values.append(blink_counter_value) #rekam nilai blink counter
