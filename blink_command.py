@@ -63,7 +63,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/" #+ folder1 + "/" + folder2 + "/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/" #+ folder1 + "/" + folder2 + "/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -324,10 +324,21 @@ class BlinkCounterandEARPlot:
         h =  int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv.CAP_PROP_FPS))
 
+        # Validasi fps - jika 0 atau tidak valid, gunakan default 30
+        if fps <= 0:
+            print(f"FPS terdeteksi: {fps}, menggunakan default 30")
+            fps = 30
+
+        print(f"Video properties: {w}x{h} @ {fps} fps")
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
+
+            # Debug: cek format frame
+            if self.frame_number == 0:
+                print(f"Frame shape: {frame.shape}, dtype: {frame.dtype}")
 
             # Process frame and get EAR
             frame, ear = self.process_frame(frame)
@@ -399,24 +410,40 @@ class BlinkCounterandEARPlot:
 
     def _handle_video_output(self, stacked_frame, fps):
         """Handle video output, including saving and display."""
+        # Validasi dan debug frame
+        if self.frame_number == 0:
+            print(f"Stacked frame: shape={stacked_frame.shape}, dtype={stacked_frame.dtype}")
+        
+        # Pastikan frame dalam format yang benar (BGR uint8)
+        if stacked_frame.dtype != np.uint8:
+            stacked_frame = stacked_frame.astype(np.uint8)
+        
+        # Pastikan hanya 3 channel (BGR)
+        if len(stacked_frame.shape) == 2:
+            # Grayscale - konversi ke BGR
+            stacked_frame = cv.cvtColor(stacked_frame, cv.COLOR_GRAY2BGR)
+        elif stacked_frame.shape[2] == 4:
+            # RGBA - konversi ke BGR
+            stacked_frame = cv.cvtColor(stacked_frame, cv.COLOR_RGBA2BGR)
+        
         # Initialize video writer if needed
         if self.new_w is None:
             self.new_w = stacked_frame.shape[1]
             self.new_h = stacked_frame.shape[0]
+            print(f"VideoWriter initialized: {self.new_w}x{self.new_h} @ {fps} fps")
             if self.save_video:
-                # Gunakan codec yang lebih kompatibel:
-                # - 'XVID' = Xvid codec (lebih stabil dari mp4v)
-                # - 'MJPG' = Motion JPEG (lebih andal untuk debug)
-                # - 'DIVX' = DivX codec
                 self.out = cv.VideoWriter(
                     self.output_filename,
                     cv.VideoWriter_fourcc(*'XVID'),
                     fps,
                     (self.new_w, self.new_h)
                 )
+                # Verifikasi VideoWriter berhasil dibuka
+                if not self.out.isOpened():
+                    print("ERROR: VideoWriter gagal dibuka!")
 
         # Save frame if requested
-        if self.save_video:
+        if self.save_video and self.out.isOpened():
             self.out.write(stacked_frame)
 
         # Display frame
@@ -435,9 +462,15 @@ class BlinkCounterandEARPlot:
         buffer = self.canvas.buffer_rgba()
         img_array = np.asarray(buffer)
         
-        # Convert RGBA to RGB
-        img_rgb = cv.cvtColor(img_array, cv.COLOR_RGBA2RGB)
-        return img_rgb
+        # img_array shape: (height, width, 4) - RGBA
+        # Konversi RGBA ke BGR untuk OpenCV
+        img_bgr = cv.cvtColor(img_array, cv.COLOR_RGBA2BGR)
+        
+        # Pastikan dtype uint8
+        if img_bgr.dtype != np.uint8:
+            img_bgr = img_bgr.astype(np.uint8)
+        
+        return img_bgr
 
         
     def _save_ear_values_to_txt(self):
@@ -475,8 +508,7 @@ class BlinkCounterandEARPlot:
             self.threshold_line.set_ydata([self.EAR_THRESHOLD] * len(self.saved_frame_numbers))
 
             self.fig.savefig(plot_image_path, bbox_inches='tight', facecolor=self.fig.get_facecolor())
-
-# 
+ 
 
 
 
@@ -497,11 +529,11 @@ if __name__ == "__main__":
                 blink_counter = BlinkCounterandEARPlot(
                     video_path=input_video_path,
                     threshold=0.2,
-                    min_consec_frames=2,
+                    min_consec_frames=1,
                     max_consec_frames=5,
                     interval_threshold=20,
                     save_video=True,
-                    output_filename= "cobak.mp4" #file + ".mp4"
+                    output_filename= "XVID.mp4" #file + ".mp4"
                 )
                 blink_counter.process_video()
 
