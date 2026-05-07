@@ -52,7 +52,7 @@ class BlinkCounterandEARPlot:
         self._init_tracking_variables()
         
         # Initialize plotting
-        self._init_plot()
+        # self._init_plot()
 
     def _init_video_saving(self, save_video, output_filename):
         """Initialize video saving parameters and create output directory if needed."""
@@ -61,7 +61,8 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/"    #Kombinasi/" + folder1 + "/" + folder2 + "/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/"
+
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
@@ -250,7 +251,7 @@ class BlinkCounterandEARPlot:
         color = self.COLORS['BLUE']['bgr'] if ear < self.EAR_THRESHOLD else self.COLORS['GREEN']['bgr']
         
         # Draw landmarks and update blink counter
-        self._draw_frame_elements(frame, face_landmarks, color)
+        # self._draw_frame_elements(frame, face_landmarks, color)
         
         return frame, ear
 
@@ -306,7 +307,7 @@ class BlinkCounterandEARPlot:
             if ear is not None:
                 self._update_blink_detection(ear)
             
-                self._update_visualization(frame, ear, fps)
+                # self._update_visualization(frame, ear, fps)
 
             if cv.waitKey(1) & 0xFF == ord('p'):
                 break
@@ -368,7 +369,7 @@ class BlinkCounterandEARPlot:
             int(resizing_factor * stacked_frame.shape[0])
         )
         stacked_frame_resized = cv.resize(stacked_frame, resized_shape)
-        cv.imshow("folder1 + folder2 + file", stacked_frame_resized)
+        cv.imshow("lighting + jarak + sudut", stacked_frame_resized)
 
     def plot_to_image(self):
         """Convert the matplotlib plot to an OpenCV-compatible image."""
@@ -418,10 +419,13 @@ class BlinkCounterandEARPlot:
             self.fig.savefig(plot_image_path, bbox_inches='tight', facecolor=self.fig.get_facecolor())
 
 def _save_blink_counter_to_txt():
-    """Untuk menyimpan nilai blink counter ke dalam file teks setelah memproses semua video dalam folder1/folder2."""
+    """Untuk menyimpan nilai blink counter ke dalam file teks setelah memproses semua video dalam lighting/jarak."""
 
-    blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/" + folder1 + "/"
-    blink_counter_values_filename = folder1 + ".txt"
+
+    blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/threshold = 0.18, consec = 2/"
+
+    os.makedirs(blink_counter_values_dir, exist_ok=True)
+    blink_counter_values_filename = lighting + ".txt"
     blink_counter_values_path = os.path.join(blink_counter_values_dir, blink_counter_values_filename)
 
     with open(blink_counter_values_path, "w", encoding="utf-8") as f:
@@ -437,28 +441,31 @@ def _save_multiseries_plot(self):
 
 if __name__ == "__main__":
     # Example usage
-    # blink_counter_values = []  # List to store blink counter values for all videos
-    # blink_counter_value = 0  # Variable to store the blink counter value for the current video
+    blink_counter_values = []  # List to store blink counter values for all videos
+    blink_counter_value = 0  # Variable to store the blink counter value for the current video
     
-    # for folder1 in ["500 lumen", "800 lumen", "1000 lumen", "1200 lumen", "1300 lumen"]:
-    #     for folder2 in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
-    #         for file in ["0", "10", "20", "30", "40", "50"]:
-                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\WIN_20260426_07_34_33_Pro.mp4" 
-                #"DATA/VIDEOS/INPUTS/Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
+    
+    for lighting in ["1", "2", "3", "4", "5","6"]:
+        for jarak in ["050cm", "100cm", "150cm", "200cm"]: 
+            for sudut in ["00", "10", "20", "30", "40", "50"]:
+                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
                 blink_counter = BlinkCounterandEARPlot(
                     video_path=input_video_path,
-                    threshold=0.2,
-                    consec_frames=1,
+                    threshold=0.18,
+                    consec_frames=2,
                     save_video=True,
-                    output_filename= "wajah gak keliatan atas.mp4"
+                    output_filename= lighting + "_" + jarak + "_" + sudut + ".mp4"
                 )
                 blink_counter.process_video()
-                # blink_counter_value = blink_counter.blink_counter  # Get the blink counter value for the current video  
+                blink_counter_value = blink_counter.blink_counter  # Get the blink counter value for the current video  
 
-                # blink_counter_values.append(blink_counter_value) #rekam nilai blink counter
+                blink_counter_values.append(blink_counter_value) #rekam nilai blink counter
+                
             
             # blink_counter._save_multiseries_plot()
 
-        # _save_blink_counter_to_txt()  # Save the blink counter values to a text file after processing all videos in the current folder1/folder2
+        # _save_blink_counter_to_txt()  # Save the blink counter values to a text file after processing all videos in the current lighting/jarak
             
         # blink_counter_values.clear()  # Clear the list for the next set of videos        
+
+    _save_blink_counter_to_txt()

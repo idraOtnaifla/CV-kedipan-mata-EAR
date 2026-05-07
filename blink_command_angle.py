@@ -6,7 +6,8 @@ from FaceMeshModule import FaceMeshGenerator
 from utils import DrawingUtils
 import os
 import time
-
+import math
+from playsound import playsound
 
 
 class BlinkCounterandEARPlot:
@@ -53,10 +54,33 @@ class BlinkCounterandEARPlot:
         self._init_video_saving(save_video, output_filename)
         
         # Initialize tracking variables
-        self._init_tracking_variables()
+        self._init_tracking_and_command_variables()
         
         # Initialize plotting
         self._init_plot()
+        
+        # Initialize angle estimation
+        self._init_angle_estimation()
+    
+    def _init_angle_estimation(self):
+        """Initialize variables for angle estimation."""
+        # Face coordination in real world (3D model)
+        self.face_coordination_in_real_world = np.array([
+            [285, 528, 200],
+            [285, 371, 152],
+            [197, 574, 128],
+            [173, 425, 108],
+            [360, 574, 128],
+            [391, 425, 108]
+        ], dtype=np.float64)
+        
+        # Landmark indices for angle estimation
+        self.angle_landmark_indices = [1, 9, 57, 130, 287, 359]
+        
+        # Current angles
+        self.pitch = 0
+        self.yaw = 0
+        self.roll = 0
 
     def _init_video_saving(self, save_video, output_filename):
         """Initialize video saving parameters and create output directory if needed."""
@@ -65,18 +89,21 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/" #+ folder1 + "/" + folder2 + "/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/Variasi Pengguna/" #+ folder1 + "/" + folder2 + "/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
 
-    def _init_tracking_variables(self):
+    def _init_tracking_and_command_variables(self):
         """Initialize variables used for tracking blinks and frame processing."""
         self.blink_counter = 0
         self.frame_counter = 0
         self.frame_number = 0
         self.blink_framestamp = 0   #Frame dimana blink terdeteksi
         self.blink_interval = 0     #Jeda antar blink 
+        self.fan_ignite = 0
         self.fanspeed = 0
+        self.fan_status = "Kipas OFF"
+        self.fan_command = " "
         self.ear_values = []
         self.saved_ear_values = []
         self.frame_numbers = []
@@ -188,6 +215,70 @@ class BlinkCounterandEARPlot:
                           np.array(landmarks[eye_landmarks[3]]))
         return (A + B) / (2.0 * C)
 
+    def rotation_matrix_to_angles(self, rotation_matrix):
+        """
+        Calculate Euler angles from rotation matrix.
+        
+        Args:
+            rotation_matrix: A 3*3 rotation matrix
+            
+        Returns:
+            numpy array: Angles in degrees for each axis (pitch, yaw, roll)
+        """
+        x = math.atan2(rotation_matrix[2, 1], rotation_matrix[2, 2])
+        y = math.atan2(-rotation_matrix[2, 0], math.sqrt(rotation_matrix[0, 0] ** 2 +
+                                                         rotation_matrix[1, 0] ** 2))
+        z = math.atan2(rotation_matrix[1, 0], rotation_matrix[0, 0])
+        return np.array([x, y, z]) * 180. / math.pi
+
+    def estimate_head_pose(self, face_landmarks, frame_width, frame_height):
+        """
+        Estimate head pose angles from facial landmarks.
+        
+        Args:
+            face_landmarks: Dictionary of facial landmark coordinates
+            frame_width: Width of the video frame
+            frame_height: Height of the video frame
+            
+        Returns:
+            tuple: (pitch, yaw, roll) angles in degrees
+        """
+        face_coordination_in_image = []
+        
+        # face_landmarks is a dictionary with landmark ID as key and (x, y) tuple as value
+        for idx in self.angle_landmark_indices:
+            if idx in face_landmarks:
+                x, y = face_landmarks[idx]
+                face_coordination_in_image.append([x, y])
+        
+        if len(face_coordination_in_image) != 6:
+            return self.pitch, self.yaw, self.roll
+        
+        face_coordination_in_image = np.array(face_coordination_in_image, dtype=np.float64)
+        
+        # The camera matrix
+        focal_length = 1 * frame_width
+        cam_matrix = np.array([[focal_length, 0, frame_width / 2],
+                               [0, focal_length, frame_height / 2],
+                               [0, 0, 1]])
+        
+        # The Distance Matrix
+        dist_matrix = np.zeros((4, 1), dtype=np.float64)
+        
+        # Use solvePnP function to get rotation vector
+        success, rotation_vec, transition_vec = cv.solvePnP(
+            self.face_coordination_in_real_world, face_coordination_in_image,
+            cam_matrix, dist_matrix)
+        
+        if success:
+            # Use Rodrigues function to convert rotation vector to matrix
+            rotation_matrix, jacobian = cv.Rodrigues(rotation_vec)
+            
+            result = self.rotation_matrix_to_angles(rotation_matrix)
+            self.pitch, self.yaw, self.roll = result
+        
+        return self.pitch, self.yaw, self.roll
+
     def _update_plot(self, ear):
         """Update the plot with new EAR values."""
         if len(self.ear_values) > self.max_frames:
@@ -247,23 +338,30 @@ class BlinkCounterandEARPlot:
         frame, face_landmarks = self.generator.create_face_mesh(frame, draw=False)
         
         if not face_landmarks:
-            return frame, None
+            return frame, None, None
             
         # Calculate EAR
         right_ear = self.eye_aspect_ratio(self.RIGHT_EYE_EAR, face_landmarks)
         left_ear = self.eye_aspect_ratio(self.LEFT_EYE_EAR, face_landmarks)
         ear = (right_ear + left_ear) / 2.0
         
+        # Estimate head pose angles
+        h, w, _ = frame.shape
+        pitch, yaw, roll = self.estimate_head_pose(face_landmarks, w, h)
+        
         # Determine visualization color
         color = self.COLORS['BLUE']['bgr'] if ear < self.EAR_THRESHOLD else self.COLORS['GREEN']['bgr']
         
         # Draw landmarks and update blink counter
-        self._draw_frame_elements(frame, face_landmarks, color)
+        self._draw_frame_elements(frame, face_landmarks, color, pitch, yaw, roll)
         
-        return frame, ear
+        return frame, ear, (pitch, yaw, roll)
 
-    def _draw_frame_elements(self, frame, landmarks, color):
-        """Draw eye landmarks and blink counter on the frame."""
+    def _draw_frame_elements(self, frame, landmarks, color, pitch=0, yaw=0, roll=0):
+        """Draw eye landmarks, blink counter, and head pose angles on the frame."""
+        # Get frame dimensions
+        h, w, _ = frame.shape
+        
         # Draw eye landmarks
         for eye in [self.RIGHT_EYE, self.LEFT_EYE]:
             for loc in eye:
@@ -271,18 +369,54 @@ class BlinkCounterandEARPlot:
         
         # Draw blink counter
         DrawingUtils.draw_text_with_bg(
-            frame, f"Blinks: {self.blink_counter}", (0, 60),
-            font_scale=2, thickness=3,
+            frame, f"Kedip: {self.blink_counter}", (0, 30),
+            font_scale=1, thickness=3,
             bg_color=color, text_color=(0, 0, 0)
         )
 
         # Draw fan command
         DrawingUtils.draw_text_with_bg(
+            frame, f"{self.fan_status}", (0, 70),
+            font_scale=0.75, thickness=1,
+            bg_color=color, text_color=(0, 0, 0)
+        )
+
+        DrawingUtils.draw_text_with_bg(
             frame, f"Kecepatan kipas  = {self.fanspeed}", (0, 100),
             font_scale=0.75, thickness=1,
             bg_color=color, text_color=(0, 0, 0)
         )
+
+        DrawingUtils.draw_text_with_bg(
+            frame, f"{self.fan_command}", (0, 130),
+            font_scale=0.75, thickness=1,
+            bg_color=color, text_color=(0, 0, 0)
+        )
         
+                
+        cv.line(frame, (w//2, 0), (w//2, h), (0, 255, 0), 2)
+        cv.line(frame, (0, h//2), (w, h//2), (0, 255, 0), 2)
+
+
+        DrawingUtils.draw_text_with_bg(
+            frame, f'pitch: {int(pitch)}', (w - 150, 30),
+            font_scale=0.75, thickness=1,
+            bg_color=color, text_color=(0, 0, 0)
+        )
+
+        DrawingUtils.draw_text_with_bg(
+            frame, f'yaw: {int(yaw)}', (w - 150, 60),
+            font_scale=0.75, thickness=1,
+            bg_color=color, text_color=(0, 0, 0)
+        )
+
+        DrawingUtils.draw_text_with_bg(
+            frame, f'roll: {int(roll)}', (w - 150, 90),
+            font_scale=0.75, thickness=1,
+            bg_color=color, text_color=(0, 0, 0)
+        )
+                
+                
 
     def process_video(self):
         """Process the entire video and detect blinks."""
@@ -345,11 +479,12 @@ class BlinkCounterandEARPlot:
                 print(f"Frame shape: {frame.shape}, dtype: {frame.dtype}")
 
             # Process frame and get EAR
-            frame, ear = self.process_frame(frame)
+            frame, ear, angles = self.process_frame(frame)
             
             if ear is not None:
                 self._update_blink_detection(ear)
-                            
+                
+                pitch, yaw, roll = angles if angles else (0, 0, 0)        
                 self._update_visualization(frame, ear, fps)
 
             # Menghitung sisa waktu agar pas dengan FPS
@@ -372,6 +507,7 @@ class BlinkCounterandEARPlot:
         if self.blink_interval >= self.interval_threshold :
             self._command()
             self.blink_counter = 0
+            self.fan_command = " "
             
 
         if ear < self.EAR_THRESHOLD:
@@ -384,6 +520,7 @@ class BlinkCounterandEARPlot:
             if self.frame_counter >= self.MIN_CONSEC_FRAMES:
                 self.blink_counter += 1
                 self.blink_framestamp = self.frame_number
+                self._play_blink_sound()
             self.frame_counter = 0
 
         self.frame_number += 1
@@ -391,18 +528,43 @@ class BlinkCounterandEARPlot:
     def _command(self):
         """Execute a command when a blink is detected."""
         if self.blink_counter >= 6:
+            self.fan_ignite = 0
             self.fanspeed = 0
+            self.fan_status = "Kipas OFF"
 
-        if self.blink_counter == 3:
+        if self.blink_counter == 3 and self.fan_ignite == 0:
+            self.fan_ignite = 1
             self.fanspeed = 1
-      
-        if self.blink_counter == 4:
-            self.fanspeed = 2
+            self.fan_status = "Kipas ON"
 
-        if self.blink_counter == 5:
-            self.fanspeed = 3
+        if self.fan_ignite == 1:
+            
+            if self.blink_counter == 4:
+                self.fanspeed += 1
+                self.fan_command = "Kipas DIPERCEPAT"
+                
+                
+            if self.blink_counter == 5:
+                self.fanspeed -= 1
+                self.fan_command = "Kipas DIPERLAMBAT"
+                
 
-        
+            if self.fanspeed < 1 :
+                self.fanspeed = 1
+
+            if self.fanspeed > 3 :
+                self.fanspeed = 3
+
+    def _play_blink_sound(self):
+        """Play a short beep when a blink is counted."""
+        if winsound is None:
+            return
+        try:
+            winsound.Beep(500, 100)
+        except RuntimeError:
+            # Some systems may not support Beep for the current user session.
+            pass
+
     def _update_visualization(self, frame, ear, fps):
         """Update the visualization including the plot and video output."""
         self._update_plot(ear)
@@ -457,7 +619,7 @@ class BlinkCounterandEARPlot:
             self.out.write(stacked_frame)
 
         # Display frame
-        resizing_factor = 0.8
+        resizing_factor = 1 
         resized_shape = (
             int(resizing_factor * stacked_frame.shape[1]),
             int(resizing_factor * stacked_frame.shape[0])
@@ -481,7 +643,6 @@ class BlinkCounterandEARPlot:
             img_bgr = img_bgr.astype(np.uint8)
         
         return img_bgr
-
         
     def _save_ear_values_to_txt(self):
         """Save the EAR values and corresponding frame numbers to a text file."""
@@ -534,15 +695,15 @@ if __name__ == "__main__":
     # for folder1 in ["500 lumen", "800 lumen", "1000 lumen", "1200 lumen", "1300 lumen"]:
     #     for folder2 in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
     #         for file in ["0", "10", "20", "30", "40", "50"]:
-                input_video_path = 0#"DATA/VIDEOS/INPUTS/WIN_20260424_10_19_59_Pro.mp4"     #Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
+                input_video_path = 0#r"C:\Users\HP\OneDrive\Pictures\Camera Roll\WIN_20260504_05_44_35_Pro.mp4"     #Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
                 blink_counter = BlinkCounterandEARPlot(
                     video_path=input_video_path,
-                    threshold=0.2,
+                    threshold=0.19,
                     min_consec_frames=1,
                     max_consec_frames=5,
-                    interval_threshold=20,
+                    interval_threshold=10,
                     save_video=True,
-                    output_filename= "XVID_diperlambat.mp4" #file + ".mp4"
+                    output_filename= "file.mp4" #file + ".mp4"
                 )
                 blink_counter.process_video()
                             
