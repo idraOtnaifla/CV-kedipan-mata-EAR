@@ -7,7 +7,14 @@ from utils import DrawingUtils
 import os
 import time
 import math
-from playsound import playsound
+import threading
+
+try:
+    from playsound import playsound
+except ImportError:
+    playsound = None
+    print("Warning: 'playsound' is not installed. Audio count feedback will be disabled.")
+
 
 
 class BlinkCounterandEARPlot:
@@ -111,6 +118,26 @@ class BlinkCounterandEARPlot:
         self.max_frames = 400
         self.new_w = self.new_h = None
         self.input_fourcc = None  # Format video input (YUY2, MJPG, dll)
+        self.audio_enabled = playsound is not None
+        self.count_audio_files = {
+            1: os.path.join("Audio", "1.mp3"),
+            2: os.path.join("Audio", "2.mp3"),
+            3: os.path.join("Audio", "3.mp3"),
+            4: os.path.join("Audio", "4.mp3"),
+            5: os.path.join("Audio", "5.mp3"),
+            6: os.path.join("Audio", "6.mp3"),
+            7: os.path.join("Audio", "7.mp3"),
+            8: os.path.join("Audio", "8.mp3"),
+            9: os.path.join("Audio", "9.mp3"),
+            10: os.path.join("Audio", "10.mp3")
+        }
+        self.fan_audio_files = {
+            "on": os.path.join("Audio", "kipas menyala.mp3"),
+            "off": os.path.join("Audio", "kipas mati.mp3"),
+            "speed_up": os.path.join("Audio", "kecepatan naik.mp3"),
+            "speed_down": os.path.join("Audio", "kecepatan turun.mp3")
+        }
+        self.status_expire_time = 0.0
 
         # Add default y-axis limits
         self.default_ymin = 0.17  # Typical minimum EAR value
@@ -483,6 +510,7 @@ class BlinkCounterandEARPlot:
             
             if ear is not None:
                 self._update_blink_detection(ear)
+                self._update_fan_status_expiration()
                 
                 pitch, yaw, roll = angles if angles else (0, 0, 0)        
                 self._update_visualization(frame, ear, fps)
@@ -520,51 +548,85 @@ class BlinkCounterandEARPlot:
             if self.frame_counter >= self.MIN_CONSEC_FRAMES:
                 self.blink_counter += 1
                 self.blink_framestamp = self.frame_number
-                self._play_blink_sound()
+                self._play_blink_count_audio(self.blink_counter)
             self.frame_counter = 0
 
         self.frame_number += 1
 
+    def _play_blink_count_audio(self, count):
+        """Play the mp3 audio for the current blink count if available."""
+        if not self.audio_enabled:
+            return
+
+        if count < 1 or count > 10:
+            return
+
+        audio_path = self.count_audio_files.get(count)
+        if not audio_path or not os.path.exists(audio_path):
+            return
+
+        threading.Thread(target=playsound, args=(audio_path,), daemon=True).start()
+
+    def _play_fan_status_audio(self, status):
+        """Play the mp3 audio for fan ON/OFF/status changes."""
+        if not self.audio_enabled:
+            return
+
+        audio_path = self.fan_audio_files.get(status)
+        if not audio_path or not os.path.exists(audio_path):
+            return
+
+        threading.Thread(target=playsound, args=(audio_path,), daemon=True).start()
+
+    def _update_fan_status_expiration(self):
+        """Reset temporary fan status text back to Kipas ON after timeout."""
+        if self.status_expire_time <= 0:
+            return
+
+        if time.time() >= self.status_expire_time:
+            if self.fan_ignite == 1 and self.fan_status not in ["Kipas OFF", "Kipas ON"]:
+                self.fan_status = "Kipas ON"
+            self.status_expire_time = 0.0
+
     def _command(self):
         """Execute a command when a blink is detected."""
         if self.blink_counter >= 6:
+            if self.fan_status != "Kipas OFF":
+                self.fan_status = "Kipas OFF"
+                self._play_fan_status_audio("off")
             self.fan_ignite = 0
             self.fanspeed = 0
-            self.fan_status = "Kipas OFF"
+            self.status_expire_time = 0.0
+            self.fan_command = " "
+            return
 
         if self.blink_counter == 3 and self.fan_ignite == 0:
             self.fan_ignite = 1
             self.fanspeed = 1
             self.fan_status = "Kipas ON"
+            self._play_fan_status_audio("on")
+            self.fan_command = " "
+            return
 
         if self.fan_ignite == 1:
-            
-            if self.blink_counter == 4:
+            if self.blink_counter == 4 and self.fanspeed < 3:
                 self.fanspeed += 1
                 self.fan_command = "Kipas DIPERCEPAT"
+                self.fan_status = "Kecepatan Naik"
+                self.status_expire_time = time.time() + 1.5
+                self._play_fan_status_audio("speed_up")
+
                 
-                
-            if self.blink_counter == 5:
+            if self.blink_counter == 5 and self.fanspeed > 1:
                 self.fanspeed -= 1
                 self.fan_command = "Kipas DIPERLAMBAT"
-                
+                self.fan_status = "Kecepatan Turun"
+                self.status_expire_time = time.time() + 1.5
+                self._play_fan_status_audio("speed_down")
 
-            if self.fanspeed < 1 :
-                self.fanspeed = 1
+            
 
-            if self.fanspeed > 3 :
-                self.fanspeed = 3
-
-    def _play_blink_sound(self):
-        """Play a short beep when a blink is counted."""
-        if winsound is None:
-            return
-        try:
-            winsound.Beep(500, 100)
-        except RuntimeError:
-            # Some systems may not support Beep for the current user session.
-            pass
-
+        
     def _update_visualization(self, frame, ear, fps):
         """Update the visualization including the plot and video output."""
         self._update_plot(ear)
@@ -701,7 +763,7 @@ if __name__ == "__main__":
                     threshold=0.19,
                     min_consec_frames=1,
                     max_consec_frames=5,
-                    interval_threshold=10,
+                    interval_threshold=20,
                     save_video=True,
                     output_filename= "file.mp4" #file + ".mp4"
                 )

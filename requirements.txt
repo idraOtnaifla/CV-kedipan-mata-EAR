@@ -3,3 +3,4 @@ mediapipe
 numpy
 tensorflow
 matplotlib
+playsound==1.3.0
