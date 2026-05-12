@@ -10,10 +10,19 @@ import math
 import threading
 
 try:
+    import pygame
+    pygame_available = True
+except ImportError:
+    pygame = None
+    pygame_available = False
+
+try:
     from playsound import playsound
 except ImportError:
     playsound = None
-    print("Warning: 'playsound' is not installed. Audio count feedback will be disabled.")
+
+if not pygame_available and playsound is None:
+    print("Warning: no audio backend installed. Audio count feedback will be disabled.")
 
 
 
@@ -110,7 +119,8 @@ class BlinkCounterandEARPlot:
         self.fan_ignite = 0
         self.fanspeed = 0
         self.fan_status = "Kipas OFF"
-        self.fan_command = " "
+        self.fan_command = ""
+        
         self.ear_values = []
         self.saved_ear_values = []
         self.frame_numbers = []
@@ -118,7 +128,9 @@ class BlinkCounterandEARPlot:
         self.max_frames = 400
         self.new_w = self.new_h = None
         self.input_fourcc = None  # Format video input (YUY2, MJPG, dll)
-        self.audio_enabled = playsound is not None
+        self.audio_enabled = pygame_available or (playsound is not None)
+        self.audio_lock = threading.Lock()
+        self.pause_until = 0.0
         self.count_audio_files = {
             1: os.path.join("Audio", "1.mp3"),
             2: os.path.join("Audio", "2.mp3"),
@@ -136,6 +148,20 @@ class BlinkCounterandEARPlot:
             "off": os.path.join("Audio", "kipas mati.mp3"),
             "speed_up": os.path.join("Audio", "kecepatan naik.mp3"),
             "speed_down": os.path.join("Audio", "kecepatan turun.mp3")
+        }
+        self.fan_speed_audio_files = {
+            1: os.path.join("Audio", "kecepatan 1.mp3"),
+            2: os.path.join("Audio", "kecepatan 2.mp3"),
+            3: os.path.join("Audio", "kecepatan 3.mp3")
+        }
+        self.audio_durations = {
+            "on": 1.0,
+            "off": 1.0,
+            "speed_up": 1.0,
+            "speed_down": 1.0,
+            1: 1.0,
+            2: 1.0,
+            3: 1.0
         }
         self.status_expire_time = 0.0
 
@@ -408,18 +434,23 @@ class BlinkCounterandEARPlot:
             bg_color=color, text_color=(0, 0, 0)
         )
 
+        if self.fan_command:
+            DrawingUtils.draw_text_with_bg(
+                frame, f"{self.fan_command}", (0, 100),
+                font_scale=0.75, thickness=1,
+                bg_color=color, text_color=(0, 0, 0)
+            )
+            command_y = 130
+        else:
+            command_y = 100
+
         DrawingUtils.draw_text_with_bg(
-            frame, f"Kecepatan kipas  = {self.fanspeed}", (0, 100),
+            frame, f"Kecepatan kipas  = {self.fanspeed}", (0, command_y),
             font_scale=0.75, thickness=1,
             bg_color=color, text_color=(0, 0, 0)
         )
 
-        DrawingUtils.draw_text_with_bg(
-            frame, f"{self.fan_command}", (0, 130),
-            font_scale=0.75, thickness=1,
-            bg_color=color, text_color=(0, 0, 0)
-        )
-        
+                
                 
         cv.line(frame, (w//2, 0), (w//2, h), (0, 255, 0), 2)
         cv.line(frame, (0, h//2), (w, h//2), (0, 255, 0), 2)
@@ -532,10 +563,13 @@ class BlinkCounterandEARPlot:
         self.saved_frame_numbers.append(self.frame_number)
         self.blink_interval = self.frame_number - self.blink_framestamp
 
+        if time.time() < self.pause_until:
+            self.frame_number += 1
+            return
+
         if self.blink_interval >= self.interval_threshold :
             self._command()
             self.blink_counter = 0
-            self.fan_command = " "
             
 
         if ear < self.EAR_THRESHOLD:
@@ -553,6 +587,50 @@ class BlinkCounterandEARPlot:
 
         self.frame_number += 1
 
+    def _init_audio(self):
+        """Initialize the pygame audio backend if available."""
+        if not pygame_available:
+            return
+
+        try:
+            pygame.mixer.init()
+        except Exception:
+            pass
+
+    def _play_audio_sequence(self, paths, duration, pause=False):
+        """Play a sequence of audio files in order, optionally pausing blink detection."""
+        if not self.audio_enabled or not paths:
+            return
+
+        if pause:
+            self.pause_until = time.time() + duration
+
+        def _play_sequence():
+            # Ensure pygame mixer is ready if available
+            self._init_audio()
+            for audio_path in paths:
+                if not os.path.exists(audio_path):
+                    continue
+
+                if pygame_available:
+                    try:
+                        pygame.mixer.music.load(audio_path)
+                        pygame.mixer.music.play()
+                        while pygame.mixer.music.get_busy():
+                            time.sleep(0.01)
+                        continue
+                    except Exception:
+                        pass
+
+                if playsound is not None:
+                    with self.audio_lock:
+                        try:
+                            playsound(audio_path)
+                        except Exception:
+                            pass
+
+        threading.Thread(target=_play_sequence, daemon=True).start()
+
     def _play_blink_count_audio(self, count):
         """Play the mp3 audio for the current blink count if available."""
         if not self.audio_enabled:
@@ -562,21 +640,29 @@ class BlinkCounterandEARPlot:
             return
 
         audio_path = self.count_audio_files.get(count)
-        if not audio_path or not os.path.exists(audio_path):
+        if not audio_path:
             return
 
-        threading.Thread(target=playsound, args=(audio_path,), daemon=True).start()
+        self._play_audio_sequence([audio_path], self.audio_durations.get(count, 1.0), pause=False)
 
-    def _play_fan_status_audio(self, status):
-        """Play the mp3 audio for fan ON/OFF/status changes."""
+    def _play_fan_status_audio(self, status, speed=None):
+        """Play the mp3 audio for fan ON/OFF and speed change events."""
         if not self.audio_enabled:
             return
 
-        audio_path = self.fan_audio_files.get(status)
-        if not audio_path or not os.path.exists(audio_path):
-            return
+        paths = []
+        duration = 0.0
 
-        threading.Thread(target=playsound, args=(audio_path,), daemon=True).start()
+        if status in self.fan_audio_files:
+            paths.append(self.fan_audio_files[status])
+            duration += self.audio_durations.get(status, 1.0)
+
+        if speed in self.fan_speed_audio_files:
+            paths.append(self.fan_speed_audio_files[speed])
+            duration += self.audio_durations.get(speed, 1.0)
+
+        if paths:
+            self._play_audio_sequence(paths, duration, pause=True)
 
     def _update_fan_status_expiration(self):
         """Reset temporary fan status text back to Kipas ON after timeout."""
@@ -584,8 +670,7 @@ class BlinkCounterandEARPlot:
             return
 
         if time.time() >= self.status_expire_time:
-            if self.fan_ignite == 1 and self.fan_status not in ["Kipas OFF", "Kipas ON"]:
-                self.fan_status = "Kipas ON"
+            self.fan_command = ""
             self.status_expire_time = 0.0
 
     def _command(self):
@@ -596,34 +681,34 @@ class BlinkCounterandEARPlot:
                 self._play_fan_status_audio("off")
             self.fan_ignite = 0
             self.fanspeed = 0
+            self.fan_command = ""
             self.status_expire_time = 0.0
-            self.fan_command = " "
+            self.blink_counter = 0
             return
 
         if self.blink_counter == 3 and self.fan_ignite == 0:
             self.fan_ignite = 1
             self.fanspeed = 1
             self.fan_status = "Kipas ON"
-            self._play_fan_status_audio("on")
-            self.fan_command = " "
+            self.fan_command = ""
+            self._play_fan_status_audio("on", speed=1)
             return
 
         if self.fan_ignite == 1:
             if self.blink_counter == 4 and self.fanspeed < 3:
                 self.fanspeed += 1
-                self.fan_command = "Kipas DIPERCEPAT"
-                self.fan_status = "Kecepatan Naik"
-                self.status_expire_time = time.time() + 1.5
-                self._play_fan_status_audio("speed_up")
+                self.fan_command = "Kecepatan Naik"
+                self._play_fan_status_audio("speed_up", speed=self.fanspeed)
+                self.status_expire_time = time.time() + self.audio_durations.get("speed_up", 1.0)
 
-                
             if self.blink_counter == 5 and self.fanspeed > 1:
                 self.fanspeed -= 1
-                self.fan_command = "Kipas DIPERLAMBAT"
-                self.fan_status = "Kecepatan Turun"
-                self.status_expire_time = time.time() + 1.5
-                self._play_fan_status_audio("speed_down")
+                self.fan_command = "Kecepatan Turun"
+                self._play_fan_status_audio("speed_down", speed=self.fanspeed)
+                self.status_expire_time = time.time() + self.audio_durations.get("speed_down", 1.0)
 
+        
+        
             
 
         
@@ -752,22 +837,29 @@ def _save_multiseries_plot(self):
 
 if __name__ == "__main__":
     # Example usage
+    nama_user = "Iskhak"
+    threshold=0.18
+    min_consec_frames = int(1)
+    max_consec_frames=int(5)
+    interval_threshold=int(10)
+    take = int(1)
 
 
-    # for folder1 in ["500 lumen", "800 lumen", "1000 lumen", "1200 lumen", "1300 lumen"]:
-    #     for folder2 in ["50 cm", "100 cm", "150 cm", "200 cm"]: 
-    #         for file in ["0", "10", "20", "30", "40", "50"]:
-                input_video_path = 0#r"C:\Users\HP\OneDrive\Pictures\Camera Roll\WIN_20260504_05_44_35_Pro.mp4"     #Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
-                blink_counter = BlinkCounterandEARPlot(
-                    video_path=input_video_path,
-                    threshold=0.19,
-                    min_consec_frames=1,
-                    max_consec_frames=5,
-                    interval_threshold=20,
-                    save_video=True,
-                    output_filename= "file.mp4" #file + ".mp4"
-                )
-                blink_counter.process_video()
+    lighting = "6"
+    jarak = "50cm" 
+    sudut = "00"
+    input_video_path = 0#r"C:\Users\HP\OneDrive\Pictures\Camera Roll\WIN_20260504_05_44_35_Pro.mp4"     
+    #Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
+    blink_counter = BlinkCounterandEARPlot(
+        video_path=input_video_path,
+        threshold=threshold,
+        min_consec_frames= min_consec_frames,
+        max_consec_frames= max_consec_frames,
+        interval_threshold= interval_threshold,
+        save_video=True,
+        output_filename= f"{threshold}_{min_consec_frames}_{max_consec_frames}_{interval_threshold}_{lighting}_{jarak}_{nama_user}_{take}.mp4" 
+    )
+    blink_counter.process_video()
                             
             
 

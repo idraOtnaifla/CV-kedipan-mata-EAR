@@ -28,14 +28,15 @@ class BlinkCounterandEARPlot:
         'RED': {'hex': '#f70202', 'bgr': None}
     }
 
-    def __init__(self, video_path, threshold, consec_frames, save_video, output_filename=None):
+    def __init__(self, video_path, threshold, min_consec_frames, max_consec_frames, save_video, output_filename=None):
         """
         Initialize the BlinkCounter with video and detection parameters.
         
         Args:
             video_path (str): Path to the input video file
             threshold (float): EAR threshold for blink detection
-            consec_frames (int): Number of consecutive frames below threshold to count as a blink
+            min_consec_frames (int): Minimum number of consecutive frames below threshold to count as a blink
+            max_consec_frames (int): Maximum number of consecutive frames below threshold before resetting
             save_video (bool): Whether to save the processed video
             output_filename (str): Name of the video file if saving
         """
@@ -43,7 +44,8 @@ class BlinkCounterandEARPlot:
         self.generator = FaceMeshGenerator()
         self.video_path = video_path
         self.EAR_THRESHOLD = threshold
-        self.CONSEC_FRAMES = consec_frames
+        self.MIN_CONSEC_FRAMES = min_consec_frames
+        self.MAX_CONSEC_FRAMES = max_consec_frames
         
         # Initialize video saving parameters
         self._init_video_saving(save_video, output_filename)
@@ -322,7 +324,10 @@ class BlinkCounterandEARPlot:
         if ear < self.EAR_THRESHOLD:
             self.frame_counter += 1
         else:
-            if self.frame_counter >= self.CONSEC_FRAMES:
+            if self.frame_counter >= self.MAX_CONSEC_FRAMES :
+                self.frame_counter = 0
+
+            if self.frame_counter >= self.MIN_CONSEC_FRAMES:
                 self.blink_counter += 1
                 
             self.frame_counter = 0
@@ -422,10 +427,10 @@ def _save_blink_counter_to_txt():
     """Untuk menyimpan nilai blink counter ke dalam file teks setelah memproses semua video dalam lighting/jarak."""
 
 
-    blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/threshold = 0.18, consec = 2/"
+    blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/"
 
     os.makedirs(blink_counter_values_dir, exist_ok=True)
-    blink_counter_values_filename = lighting + ".txt"
+    blink_counter_values_filename = "0.18_min_1_max_5.txt"
     blink_counter_values_path = os.path.join(blink_counter_values_dir, blink_counter_values_filename)
 
     with open(blink_counter_values_path, "w", encoding="utf-8") as f:
@@ -447,19 +452,22 @@ if __name__ == "__main__":
     
     for lighting in ["1", "2", "3", "4", "5","6"]:
         for jarak in ["050cm", "100cm", "150cm", "200cm"]: 
-            for sudut in ["00", "10", "20", "30", "40", "50"]:
-                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
+            for sudut in ["00","10", "20", "30", "40", "50"]:
+                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\Kombinasi\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
                 blink_counter = BlinkCounterandEARPlot(
                     video_path=input_video_path,
                     threshold=0.18,
-                    consec_frames=2,
-                    save_video=True,
+                    min_consec_frames=1,
+                    max_consec_frames=5,
+                    save_video=False,
                     output_filename= lighting + "_" + jarak + "_" + sudut + ".mp4"
                 )
                 blink_counter.process_video()
                 blink_counter_value = blink_counter.blink_counter  # Get the blink counter value for the current video  
 
                 blink_counter_values.append(blink_counter_value) #rekam nilai blink counter
+                print(f"\nBlink counter for {lighting}_{jarak}_{sudut}: {blink_counter_value}\n")
+                print(f"time in seconds: {blink_counter.frame_number / 30}\n")  # Assuming 30 FPS for time calculation
                 
             
             # blink_counter._save_multiseries_plot()
