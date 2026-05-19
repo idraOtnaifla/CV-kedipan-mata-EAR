@@ -54,7 +54,7 @@ class BlinkCounterandEARPlot:
         self._init_tracking_variables()
         
         # Initialize plotting
-        # self._init_plot()
+        self._init_plot()
 
     def _init_video_saving(self, save_video, output_filename):
         """Initialize video saving parameters and create output directory if needed."""
@@ -63,7 +63,7 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/Pengujian Kombinasi/"
 
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
@@ -253,7 +253,7 @@ class BlinkCounterandEARPlot:
         color = self.COLORS['BLUE']['bgr'] if ear < self.EAR_THRESHOLD else self.COLORS['GREEN']['bgr']
         
         # Draw landmarks and update blink counter
-        # self._draw_frame_elements(frame, face_landmarks, color)
+        self._draw_frame_elements(frame, face_landmarks, color)
         
         return frame, ear
 
@@ -309,7 +309,7 @@ class BlinkCounterandEARPlot:
             if ear is not None:
                 self._update_blink_detection(ear)
             
-                # self._update_visualization(frame, ear, fps)
+                self._update_visualization(frame, ear, fps)
 
             if cv.waitKey(1) & 0xFF == ord('p'):
                 break
@@ -427,10 +427,10 @@ def _save_blink_counter_to_txt():
     """Untuk menyimpan nilai blink counter ke dalam file teks setelah memproses semua video dalam lighting/jarak."""
 
 
-    blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Kombinasi/"
+    blink_counter_values_dir = "DATA/VIDEOS/OUTPUTS/Pengujian Kombinasi/"
 
     os.makedirs(blink_counter_values_dir, exist_ok=True)
-    blink_counter_values_filename = "0.18_min_1_max_5.txt"
+    blink_counter_values_filename = f"{threshold}_min{min_consec_frames}_max{max_consec_frames}.txt"
     blink_counter_values_path = os.path.join(blink_counter_values_dir, blink_counter_values_filename)
 
     with open(blink_counter_values_path, "w", encoding="utf-8") as f:
@@ -449,17 +449,20 @@ if __name__ == "__main__":
     blink_counter_values = []  # List to store blink counter values for all videos
     blink_counter_value = 0  # Variable to store the blink counter value for the current video
     
-    
-    for lighting in ["1", "2", "3", "4", "5","6"]:
-        for jarak in ["050cm", "100cm", "150cm", "200cm"]: 
-            for sudut in ["00","10", "20", "30", "40", "50"]:
-                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\Kombinasi\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
+    threshold=float(0.18)
+    min_consec_frames=int(1)
+    max_consec_frames=int(10)
+
+    for lighting in ["050lux"]:#, "100lux", "300lux", "500lux"]:
+        for jarak in ["050cm"]:#, "100cm", "150cm", "200cm"]: 
+            for sudut in ["00"]:#,"10", "20", "30", "40", "50"]:
+                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\Pengujian Kombinasi\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
                 blink_counter = BlinkCounterandEARPlot(
                     video_path=input_video_path,
-                    threshold=0.18,
-                    min_consec_frames=1,
-                    max_consec_frames=5,
-                    save_video=False,
+                    threshold=threshold,
+                    min_consec_frames=min_consec_frames,
+                    max_consec_frames=max_consec_frames,
+                    save_video=True,
                     output_filename= lighting + "_" + jarak + "_" + sudut + ".mp4"
                 )
                 blink_counter.process_video()
@@ -476,4 +479,5 @@ if __name__ == "__main__":
             
         # blink_counter_values.clear()  # Clear the list for the next set of videos        
 
-    _save_blink_counter_to_txt()
+    #_save_blink_counter_to_txt()
+    

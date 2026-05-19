@@ -532,6 +532,8 @@ class BlinkCounterandEARPlot:
 
             start_time = time.time()
 
+            frame = cv.flip(frame, 1)  # Mirror the frame for natural interaction
+            
             # Debug: cek format frame
             if self.frame_number == 0:
                 print(f"Frame shape: {frame.shape}, dtype: {frame.dtype}")
@@ -837,16 +839,16 @@ def _save_multiseries_plot(self):
 
 if __name__ == "__main__":
     # Example usage
-    nama_user = "Iskhak"
+    nama_user = "Ardi"
     threshold=0.18
     min_consec_frames = int(1)
     max_consec_frames=int(5)
-    interval_threshold=int(10)
+    interval_threshold=int(15)
     take = int(1)
 
 
-    lighting = "6"
-    jarak = "50cm" 
+    lighting = "300lux"
+    jarak = "050cm" 
     sudut = "00"
     input_video_path = 0#r"C:\Users\HP\OneDrive\Pictures\Camera Roll\WIN_20260504_05_44_35_Pro.mp4"     
     #Kombinasi/" + folder1 + "/" + folder2 + "/" + file + ".mp4"
@@ -857,7 +859,7 @@ if __name__ == "__main__":
         max_consec_frames= max_consec_frames,
         interval_threshold= interval_threshold,
         save_video=True,
-        output_filename= f"{threshold}_{min_consec_frames}_{max_consec_frames}_{interval_threshold}_{lighting}_{jarak}_{nama_user}_{take}.mp4" 
+        output_filename= f"{threshold}_min{min_consec_frames}_max{max_consec_frames}_int{interval_threshold}_{lighting}_{jarak}_{sudut}_{nama_user}_{take}.mp4" 
     )
     blink_counter.process_video()
                             

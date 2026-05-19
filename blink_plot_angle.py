@@ -445,8 +445,10 @@ class BlinkCounterandEARPlot:
             ret, frame = cap.read()
             if not ret:
                 break
-
+                
             start_time = time.time()
+
+            frame = cv.flip(frame, 1)  # Mirror the frame for natural interaction
 
             # Debug: cek format frame
             if self.frame_number == 0:
