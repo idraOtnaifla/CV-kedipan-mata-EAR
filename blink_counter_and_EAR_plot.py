@@ -453,10 +453,10 @@ if __name__ == "__main__":
     min_consec_frames=int(1)
     max_consec_frames=int(10)
 
-    for lighting in ["050lux"]:#, "100lux", "300lux", "500lux"]:
-        for jarak in ["050cm"]:#, "100cm", "150cm", "200cm"]: 
-            for sudut in ["00"]:#,"10", "20", "30", "40", "50"]:
-                input_video_path = r"C:\Users\HP\OneDrive\Pictures\Camera Roll\Pengujian Kombinasi\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
+    # for lighting in ["050lux"]:#, "100lux", "300lux", "500lux"]:
+    #     for jarak in ["050cm"]:#, "100cm", "150cm", "200cm"]: 
+    #         for sudut in ["00"]:#,"10", "20", "30", "40", "50"]:
+                input_video_path = 0#r"C:\Users\HP\OneDrive\Pictures\Camera Roll\Pengujian Kombinasi\\" + lighting + "_" + jarak + "_" + sudut + ".mp4"
                 blink_counter = BlinkCounterandEARPlot(
                     video_path=input_video_path,
                     threshold=threshold,

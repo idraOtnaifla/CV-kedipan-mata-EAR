@@ -8,85 +8,107 @@ import os
 import time
 import math
 import threading
-
-try:
-    import pygame
-    pygame_available = True
-except ImportError:
-    pygame = None
-    pygame_available = False
-
-try:
-    from playsound import playsound
-except ImportError:
-    playsound = None
-
-if not pygame_available and playsound is None:
-    print("Warning: no audio backend installed. Audio count feedback will be disabled.")
+import serial
 
 
 
-class BlinkCounterandEARPlot:
-    """
-    A class to detect and count eye blinks in a video using facial landmarks.
-    
-    This class processes video frames to detect faces, track eye movements,
-    calculate Eye Aspect Ratio (EAR), plot EAR, and count blinks in real-time.
-    """
-    
-    # Define facial landmark indices for eyes
-    RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
-    LEFT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
-    RIGHT_EYE_EAR = [33, 159, 158, 133, 153, 145]  # Points for EAR calculation
-    LEFT_EYE_EAR = [362, 380, 374, 263, 386, 385]  # Points for EAR calculation
-    
-    # Define colors for visualization
-    COLORS = {
-        'GREEN': {'hex': '#56f10d', 'bgr': (86, 241, 13)},
-        'BLUE': {'hex': '#0329fc', 'bgr': (30, 46, 209)},
-        'RED': {'hex': '#f70202', 'bgr': None}
-    }
+time.sleep(2)  # tunggu Arduino reset
+# try:
+#     import serial
+#     import serial.tools.list_ports
+#     serial_available = True
+        # Implement stateful rules:
+        # - 3 blinks: turn fan ON (speed 1) if currently OFF
+        # - 4 blinks: increase speed (only if fan is ON)
+        # - 5 blinks: decrease speed (only if fan is ON)
+        # - 6 or more: turn fan OFF (only if fan is ON)
 
-    def __init__(self, video_path, threshold, min_consec_frames, max_consec_frames, interval_threshold, save_video, output_filename=None):
-        """
-        Initialize the BlinkCounter with video and detection parameters.
-        
-        Args:
-            video_path (str): Path to the input video file
-            threshold (float): EAR threshold for blink detection
-            consec_frames (int): Number of consecutive frames below threshold to count as a blink
-            save_video (bool): Whether to save the processed video
-            output_filename (str): Name of the video file if saving
-        """
-        # Initialize core parameters
-        self.generator = FaceMeshGenerator()
-        self.video_path = video_path
-        self.EAR_THRESHOLD = threshold
-        self.MIN_CONSEC_FRAMES = min_consec_frames
-        self.MAX_CONSEC_FRAMES = max_consec_frames
-        self.interval_threshold = interval_threshold
-        
-        # Initialize video saving parameters
-        self._init_video_saving(save_video, output_filename)
-        
-        # Initialize tracking variables
-        self._init_tracking_and_command_variables()
-        
-        # Initialize plotting
-        self._init_plot()
-        
-        # Initialize angle estimation
-        self._init_angle_estimation()
-    
-    def _init_angle_estimation(self):
-        """Initialize variables for angle estimation."""
-        # Face coordination in real world (3D model)
-        self.face_coordination_in_real_world = np.array([
-            [285, 528, 200],
-            [285, 371, 152],
-            [197, 574, 128],
-            [173, 425, 108],
-            [360, 574, 128],
+        try:
+            if n == 3:
+                # Turn ON only if currently OFF
+                if self.fan_ignite == 0:
+                    self.fan_ignite = 1
+                    self.fanspeed = 1
+                    self.fan_status = "Kipas ON"
+                    self.fan_command = ""
+                    kirim = f"#A1$"
+                    self.arduino.write(kirim.encode())
+                    print(f"[SEND] {kirim} -> Kipas ON speed=1")
+                    self._play_fan_status_audio("on", speed=1)
+                    time.sleep(0.1)
+                    if self.arduino.in_waiting > 0:
+                        resp = self.arduino.readline().decode('utf-8', errors='ignore').strip()
+                        if resp:
+                            print(f"[RESP] {resp}")
+                else:
+                    print("[INFO] Kipas sudah ON — 3 kedipan diabaikan")
+
+            elif n == 4:
+                # Increase speed only if fan is ON
+                if self.fan_ignite == 1:
+                    if self.fanspeed < 3:
+                        self.fanspeed += 1
+                        self.fan_command = "Kecepatan Naik"
+                        kirim = f"#A{self.fanspeed}$"
+                        self.arduino.write(kirim.encode())
+                        print(f"[SEND] {kirim} -> Naik ke {self.fanspeed}")
+                        self._play_fan_status_audio("speed_up", speed=self.fanspeed)
+                        self.status_expire_time = time.time() + self.audio_durations.get("speed_up", 1.0)
+                        time.sleep(0.1)
+                        if self.arduino.in_waiting > 0:
+                            resp = self.arduino.readline().decode('utf-8', errors='ignore').strip()
+                            if resp:
+                                print(f"[RESP] {resp}")
+                    else:
+                        print("[INFO] Kecepatan sudah maksimum — 4 kedipan diabaikan")
+                else:
+                    print("[INFO] Kipas OFF — 4 kedipan tidak berpengaruh")
+
+            elif n == 5:
+                # Decrease speed only if fan is ON
+                if self.fan_ignite == 1:
+                    if self.fanspeed > 1:
+                        self.fanspeed -= 1
+                        self.fan_command = "Kecepatan Turun"
+                        kirim = f"#A{self.fanspeed}$"
+                        self.arduino.write(kirim.encode())
+                        print(f"[SEND] {kirim} -> Turun ke {self.fanspeed}")
+                        self._play_fan_status_audio("speed_down", speed=self.fanspeed)
+                        self.status_expire_time = time.time() + self.audio_durations.get("speed_down", 1.0)
+                        time.sleep(0.1)
+                        if self.arduino.in_waiting > 0:
+                            resp = self.arduino.readline().decode('utf-8', errors='ignore').strip()
+                            if resp:
+                                print(f"[RESP] {resp}")
+                    else:
+                        print("[INFO] Kecepatan sudah minimum — 5 kedipan diabaikan")
+                else:
+                    print("[INFO] Kipas OFF — 5 kedipan tidak berpengaruh")
+
+            elif n >= 6:
+                # Turn OFF only if currently ON
+                if self.fan_ignite == 1:
+                    kirim = f"#A0$"
+                    self.arduino.write(kirim.encode())
+                    print(f"[SEND] {kirim} -> Kipas OFF")
+                    self._play_fan_status_audio("off")
+                    time.sleep(0.1)
+                    if self.arduino.in_waiting > 0:
+                        resp = self.arduino.readline().decode('utf-8', errors='ignore').strip()
+                        if resp:
+                            print(f"[RESP] {resp}")
+                    self.fan_ignite = 0
+                    self.fanspeed = 0
+                    self.fan_status = "Kipas OFF"
+                    self.fan_command = ""
+                else:
+                    print("[INFO] Kipas sudah OFF — 6+ kedipan diabaikan")
+
+            else:
+                print(f"[INFO] Kedipan {n} tidak dipetakan ke aksi kipas")
+
+        except Exception as e:
+            print(f"[ERROR] Gagal kirim serial: {e}")
             [391, 425, 108]
         ], dtype=np.float64)
         
@@ -105,22 +127,119 @@ class BlinkCounterandEARPlot:
         self.out = None
         
         if self.save_video and self.output_filename:
-            save_dir = "DATA/VIDEOS/OUTPUTS/Variasi Pengguna/" #+ folder1 + "/" + folder2 + "/"
+            save_dir = "DATA/VIDEOS/OUTPUTS/Arduino/" #+ folder1 + "/" + folder2 + "/"
             os.makedirs(save_dir, exist_ok=True)
             self.output_filename = os.path.join(save_dir, self.output_filename)
+
+    def _init_serial_communication(self, serial_port='COM3', baud_rate=9600):
+        """Initialize serial communication for USB device control."""
+        self.serial_port = serial_port
+        self.baud_rate = baud_rate
+        self.serial_connection = None
+        self.serial_lock = threading.Lock()
+        self.last_serial_command = None
+        
+        if not serial_available:
+            print("Serial communication not available. Install pyserial: pip install pyserial")
+            return
+        
+        if serial_port is None:
+            print("No serial port specified. Searching for available ports...")
+            self._list_available_serial_ports()
+            return
+        
+        self._connect_serial(serial_port, baud_rate)
+    
+    def _list_available_serial_ports(self):
+        """List all available serial ports."""
+        if not serial_available:
+            return []
+        
+        ports = serial.tools.list_ports.comports()
+        available_ports = []
+        print("Available serial ports:")
+        for port in ports:
+            print(f"  {port.device} - {port.description}")
+            available_ports.append(port.device)
+        
+        return available_ports
+    
+    def _connect_serial(self, port, baud_rate=9600):
+        """Establish serial connection."""
+        if not serial_available:
+            print("Serial module not available")
+            return False
+        
+        try:
+            self.serial_connection = serial.Serial(port, baud_rate, timeout=1)
+            print(f"Connected to serial port: {port} at {baud_rate} baud")
+            time.sleep(2)  # Wait for Arduino to reset
+            return True
+        except serial.SerialException as e:
+            print(f"Failed to connect to serial port {port}: {e}")
+            self.serial_connection = None
+            return False
+    
+    def _disconnect_serial(self):
+        """Close serial connection."""
+        if self.serial_connection and self.serial_connection.is_open:
+            try:
+                self.serial_connection.close()
+                print("Serial connection closed")
+            except Exception as e:
+                print(f"Error closing serial connection: {e}")
+            finally:
+                self.serial_connection = None
+    
+    def _send_serial_command(self, command):
+        """Send command via serial port.
+        
+        Args:
+            command (str): Command to send to the device
+        """
+        if not self.serial_connection or not self.serial_connection.is_open:
+            return False
+        
+        if self.last_serial_command == command:
+            # Skip sending duplicate commands
+            return True
+        
+        try:
+            with self.serial_lock:
+                # Ensure command ends with newline
+                if not command.endswith('\n'):
+                    command += '\n'
+                
+                self.serial_connection.write(command.encode())
+                self.last_serial_command = command.strip()
+                print(f"Sent: {command.strip()}")
+                
+                # Read response if available
+                if self.serial_connection.in_waiting:
+                    response = self.serial_connection.readline().decode().strip()
+                    if response:
+                        print(f"Received: {response}")
+                
+                return True
+        except Exception as e:
+            print(f"Error sending serial command: {e}")
+            return False
 
     def _init_tracking_and_command_variables(self):
         """Initialize variables used for tracking blinks and frame processing."""
         self.blink_counter = 0
+        self.blink_burst_count = 0
         self.frame_counter = 0
         self.frame_number = 0
-        self.blink_framestamp = 0   #Frame dimana blink terdeteksi
-        self.blink_interval = 0     #Jeda antar blink 
+        self.blink_framestamp = 0   # Frame dimana blink terdeteksi
+        self.blink_interval = 0     # Jeda antar blink
+        self.last_blink_time = time.time()
         self.fan_ignite = 0
         self.fanspeed = 0
         self.fan_status = "Kipas OFF"
         self.fan_command = ""
-        
+        self.arduino = serial.Serial('COM3', 9600, timeout=1)
+
         self.ear_values = []
         self.saved_ear_values = []
         self.frame_numbers = []
@@ -422,7 +541,7 @@ class BlinkCounterandEARPlot:
         
         # Draw blink counter
         DrawingUtils.draw_text_with_bg(
-            frame, f"Kedip: {self.blink_counter}", (0, 30),
+            frame, f"Kedip: {self.blink_burst_count}", (0, 30),
             font_scale=1, thickness=3,
             bg_color=color, text_color=(0, 0, 0)
         )
@@ -521,6 +640,7 @@ class BlinkCounterandEARPlot:
             cap.release()
             if self.out:
                 self.out.release()
+            # self._disconnect_serial()
             cv.destroyAllWindows()
 
     def _process_video_frames(self, cap):
@@ -580,25 +700,57 @@ class BlinkCounterandEARPlot:
             self.frame_number += 1
             return
 
-        if self.blink_interval >= self.interval_threshold :
-            self._command()
-            self.blink_counter = 0
-            
-
         if ear < self.EAR_THRESHOLD:
             self.frame_counter += 1
-            
         else:
-            if self.frame_counter >= self.MAX_CONSEC_FRAMES :
+            if self.frame_counter >= self.MAX_CONSEC_FRAMES:
                 self.frame_counter = 0
 
             if self.frame_counter >= self.MIN_CONSEC_FRAMES:
-                self.blink_counter += 1
+                self.blink_burst_count += 1
                 self.blink_framestamp = self.frame_number
-                self._play_blink_count_audio(self.blink_counter)
+                self.last_blink_time = time.time()
+                self._play_blink_count_audio(self.blink_burst_count)
+                print(f"DEBUG blink detected: burst={self.blink_burst_count}, frame={self.frame_number}")
             self.frame_counter = 0
 
+        if self.blink_burst_count > 0 and time.time() - self.last_blink_time > self.interval_threshold:
+            print(f"DEBUG execute command for blink burst {self.blink_burst_count}")
+            self._execute_command(self.blink_burst_count)
+            self.blink_burst_count = 0
+            self.frame_counter = 0
+            self.blink_framestamp = self.frame_number
+            print("DEBUG blink_burst_count reset to 0 after command")
+
         self.frame_number += 1
+
+    def _execute_command(self, n):
+        """Send a serial command after blink burst detection."""
+        commands = {
+            1: "Lampu Menyala",
+            2: "Lampu Mati",
+            3: "Kipas Menyala",
+            4: "Kipas Kecepatan 2",
+            5: "Kipas Kecepatan 3",
+            6: "Kipas Mati"
+        }
+
+        if n not in commands:
+            print(f"[ERROR] Command {n} tidak valid")
+            return
+
+        packet = f"#A{n}$"
+        try:
+            self.arduino.write(packet.encode())
+            print(f"[SEND] {packet}")
+            print(f"[CMD ] {commands[n]}")
+            time.sleep(0.1)
+            if self.arduino.in_waiting > 0:
+                response = self.arduino.readline().decode('utf-8', errors='ignore').strip()
+                if response:
+                    print(f"[RESP] {response}")
+        except Exception as e:
+            print(f"[ERROR] Gagal kirim serial: {e}")
 
     def _init_audio(self):
         """Initialize the pygame audio backend if available."""
@@ -692,6 +844,15 @@ class BlinkCounterandEARPlot:
             if self.fan_status != "Kipas OFF":
                 self.fan_status = "Kipas OFF"
                 self._play_fan_status_audio("off")
+                # Send serial command for fan OFF
+                self.kirim = f"#A0$"
+                print("DEBUG Kirim:", self.kirim)
+                self.arduino.write(self.kirim.encode())
+                time.sleep(0.1) # Tunggu sebentar agar Arduino selesai merespons
+                if self.arduino.in_waiting > 0:
+                    balasan = self.arduino.readline().decode('utf-8').rstrip()
+                    print(f"Respon Arduino: {balasan}")
+                # self._send_serial_command("#A0$")
             self.fan_ignite = 0
             self.fanspeed = 0
             self.fan_command = ""
@@ -705,6 +866,15 @@ class BlinkCounterandEARPlot:
             self.fan_status = "Kipas ON"
             self.fan_command = ""
             self._play_fan_status_audio("on", speed=1)
+            # Send serial command for fan ON at speed 1
+            self.kirim = f"#A1$"
+            self.arduino.write(self.kirim.encode())
+            print("DEBUG Kirim:", self.kirim)
+            time.sleep(0.1) # Tunggu sebentar agar Arduino selesai merespons
+            if self.arduino.in_waiting > 0:
+                balasan = self.arduino.readline().decode('utf-8').rstrip()
+                print(f"Respon Arduino: {balasan}")
+            # self._send_serial_command("#A1$")
             return
 
         if self.fan_ignite == 1:
@@ -713,17 +883,36 @@ class BlinkCounterandEARPlot:
                 self.fan_command = "Kecepatan Naik"
                 self._play_fan_status_audio("speed_up", speed=self.fanspeed)
                 self.status_expire_time = time.time() + self.audio_durations.get("speed_up", 1.0)
+                # Send serial command for speed up
+                # self._send_serial_command(f"#A{self.fanspeed}$")
+                self.kirim = f"#A{self.fanspeed}$"
+                self.arduino.write(self.kirim.encode())
+                print("DEBUG Kirim:", self.kirim)
+                time.sleep(0.1) # Tunggu sebentar agar Arduino selesai merespons
+                if self.arduino.in_waiting > 0:
+                    balasan = self.arduino.readline().decode('utf-8').rstrip()
+                    print(f"Respon Arduino: {balasan}")
 
             if self.blink_counter == 5 and self.fanspeed > 1:
                 self.fanspeed -= 1
                 self.fan_command = "Kecepatan Turun"
                 self._play_fan_status_audio("speed_down", speed=self.fanspeed)
                 self.status_expire_time = time.time() + self.audio_durations.get("speed_down", 1.0)
+                # Send serial command for speed down
+                #   self._send_serial_command(f"#A{self.fanspeed}$")
+                self.kirim = f"#A{self.fanspeed}$"
+                self.arduino.write(self.kirim.encode())
+                print("DEBUG Kirim:", self.kirim)
+                time.sleep(0.1) # Tunggu sebentar agar Arduino selesai merespons
+                if self.arduino.in_waiting > 0:
+                    balasan = self.arduino.readline().decode('utf-8').rstrip()
+                    print(f"Respon Arduino: {balasan}")
+
+        print("DEBUG blink_counter", self.blink_counter, "blink_interval", self.blink_interval)
+        print("DEBUG Kirim:", self.kirim)
+    
 
         
-        
-            
-
         
     def _update_visualization(self, frame, ear, fps):
         """Update the visualization including the plot and video output."""
@@ -850,15 +1039,15 @@ def _save_multiseries_plot(self):
 
 if __name__ == "__main__":
     # Example usage
-    nama_user = "Ian"
-    threshold=0.18
+    nama_user = "Parsyah"
+    threshold = 0.18
     min_consec_frames = int(1)
-    max_consec_frames=int(5)
-    interval_threshold=int(15)
-    take = int(3)
+    max_consec_frames = int(5)
+    interval_threshold = int(2)  # gunakan 2 detik seperti import_cv2.py
+    take = int(2)
 
 
-    lighting = "500lux"
+    lighting = "100lux"
     jarak = "050cm" 
     sudut = "00"
     input_video_path = 0#r"C:\Users\HP\OneDrive\Pictures\Camera Roll\WIN_20260504_05_44_35_Pro.mp4"     
